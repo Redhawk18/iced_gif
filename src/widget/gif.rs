@@ -15,6 +15,8 @@ use iced_widget::core::{
 };
 use iced_widget::runtime::Task;
 use image_rs::codecs::gif;
+#[cfg(feature = "networking")]
+use image_rs::EncodableLayout;
 use image_rs::{AnimationDecoder, ImageDecoder};
 
 #[cfg(not(feature = "tokio"))]
@@ -31,6 +33,9 @@ pub enum Error {
     /// Load error
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[cfg(feature = "networking")]
+    #[error(transparent)]
+    Networking(#[from] reqwest::Error),
 }
 
 /// The frames of a decoded gif
@@ -70,6 +75,24 @@ impl Frames {
         Task::perform(f, std::convert::identity)
     }
 
+    #[cfg(feature = "networking")]
+    pub fn load_from_url(url: String) -> Task<Result<Frames, Error>> {
+        #[cfg(not(feature = "tokio"))]
+        use iced_futures::futures::io::BufReader;
+        #[cfg(feature = "tokio")]
+        use tokio::io::BufReader;
+
+        let f = async move {
+            let response = reqwest::get(url).await?;
+            let content = response.bytes().await?;
+            let reader = BufReader::new(content.as_bytes());
+
+            Self::from_reader(reader).await
+        };
+
+        Task::perform(f, std::convert::identity)
+    }
+
     /// Decode [`Frames`] from the supplied async reader
     pub async fn from_reader<R: AsyncRead>(reader: R) -> Result<Self, Error> {
         use iced_futures::futures::pin_mut;
@@ -91,7 +114,6 @@ impl Frames {
 
         let frames = decoder
             .into_frames()
-            .into_iter()
             .map(|result| result.map(Frame::from))
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -211,7 +233,7 @@ impl<'a> Gif<'a> {
     }
 }
 
-impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Gif<'a>
+impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Gif<'_>
 where
     Renderer: image::Renderer<Handle = Handle>,
 {

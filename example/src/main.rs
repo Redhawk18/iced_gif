@@ -31,6 +31,10 @@ impl App {
         (
             App::default(),
             gif::Frames::load_from_path(path).map(Message::Loaded),
+            // gif::Frames::load_from_url(
+            //     "https://media1.tenor.com/m/-HxZPr742BwAAAAC/meme-cat.gif".to_string(),
+            // )
+            // .map(Message::Loaded),
         )
     }
 
